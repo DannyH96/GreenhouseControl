@@ -160,7 +160,7 @@ def main():
                 current_time.strftime("%Y-%m-%d %H:%M:%S"),
                 tempHum.temperature,
                 tempHum.humidity,
-                light_level,
+                f"{light_level:.2f}",
                 light_assessment,
                 relay_state
             ]
