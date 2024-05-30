@@ -170,10 +170,9 @@ def main():
 
     except KeyboardInterrupt: # Wenn STRG+C gedrückt wird:
         GPIO.cleanup()
-        file.close() # CSV Datei schließen
         lcd.clear() # Anzeige auf dem LCD löschen
         display_on_matrix(matrixDisplay, "") # Anzeige auf der Matrix löschen
-
+        getSegmentDisplay()
 
 
 
