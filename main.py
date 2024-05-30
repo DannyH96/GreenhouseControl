@@ -133,7 +133,7 @@ def main():
 
             # Determine light assessment based on light level
             if light_level > OPTIMAL_LIGHT_LEVEL + LIGHT_LEVEL_TOLERANCE:
-                light_assessment = "H"  # Too high
+                light_assessment = "H"  # Too bright
                 display_on_matrix(matrixDisplay, "H")
             elif light_level < OPTIMAL_LIGHT_LEVEL - LIGHT_LEVEL_TOLERANCE:
                 light_assessment = "D"  # Too dark
@@ -166,14 +166,13 @@ def main():
             ]
             log_to_csv(log_data)
 
-            time.sleep(5)
+            time.sleep(60)
 
     except KeyboardInterrupt: # Wenn STRG+C gedrückt wird:
         GPIO.cleanup()
         file.close() # CSV Datei schließen
         lcd.clear() # Anzeige auf dem LCD löschen
         display_on_matrix(matrixDisplay, "") # Anzeige auf der Matrix löschen
-
 
 
 
