@@ -37,7 +37,7 @@ csv_file = "data.csv"
 if not os.path.exists(csv_file):
     with open(csv_file, 'w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Timestamp", "Temperature", "Humidity", "Light Level", "Light Assessment", "Relay State"])
+        writer.writerow(["Datum", "Temperatur in °C", "Humidity in %", "Lichtlevel", "Lichtbewertung", "Relay Status"])
 
 
 def getMatrixDisplay():
@@ -168,8 +168,14 @@ def main():
 
             time.sleep(5)
 
-    except KeyboardInterrupt:
-        GPIO.cleanup()  # Clean up GPIO settings on exit
+    except KeyboardInterrupt: # Wenn STRG+C gedrückt wird:
+        GPIO.cleanup()
+        file.close() # CSV Datei schließen
+        lcd.clear() # Anzeige auf dem LCD löschen
+        display_on_matrix(matrixDisplay, "") # Anzeige auf der Matrix löschen
+
+
+
 
 
 if __name__ == "__main__":
