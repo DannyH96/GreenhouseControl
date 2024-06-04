@@ -26,6 +26,7 @@ OPTIMAL_LIGHT_LEVEL = 40000
 RELAY_PIN = 21
 
 # Datenbankverbindung aufbauen
+# Datenbanktabelle "messwerte" erstellen mit den Attributen
 conn = sqlite3.connect('data.db')
 cursor = conn.cursor()
 cursor.execute(
@@ -44,13 +45,13 @@ cursor.execute(
 conn.commit()
 
 
-# Initialize I2C Bus
+# Initilisierung des I2C-Bus für das LCD-Display
 i2c_lcd = busio.I2C(board.SCL, board.SDA)
 
-# Set up the LCD
+# LCD Display initialisieren
 lcd = character_lcd.Character_LCD_I2C(i2c_lcd, LCD_COLUMNS, LCD_ROWS, 0x21)
 
-# Set up CSV file for logging
+# CSV-Datei mit den Headern erstellen, wenn sie noch nicht existiert
 csv_file = "data.csv"
 if not os.path.exists(csv_file):
     with open(csv_file, 'w', newline='') as file:
@@ -58,28 +59,27 @@ if not os.path.exists(csv_file):
         writer.writerow(["Datum", "Temperatur in °C", "Humidity in %", "Lichtlevel", "Lichtbewertung", "Relay Status"])
 
 
+# Funktion, um das Matrix-Display zu erstellen und zu konfigurieren
 def getMatrixDisplay():
-    # Function to create and configure the matrix display
     serial_interface = spi(port=0, device=1, gpio=noop())
     device = max7219(serial_interface, cascaded=2, block_orientation=90, rotate=0)
     return device
 
 
+# Funktion, um das 7-Segment-Display zu initialisieren
 def getSegmentDisplay():
-    # Function to create and configure the 7-segment display
     i2c = board.I2C()
     segment = Seg7x4(i2c, address=0x70)
     segment.fill(0)
     return segment
 
 
+# Funktion, um die Lichtwerte in eine Zahl umzuwandeln
 def convertToNumber(data):
-    # Function to convert 2 bytes into a decimal number
     return (data[1] + (256 * data[0])) / 1.2
 
-
+# Funktion, um Temperatur und Luftfeuchtigkeit auf dem 7-Segment-Display und LCD anzuzeigen
 def displayTemperatureAndHumidity(result, segment_display):
-    # Display function for temperature and humidity on the segment display
     temperature = round(result.temperature)
     humidity = round(result.humidity)
     print(f"Temperature: {temperature}°C")
@@ -92,6 +92,7 @@ def displayTemperatureAndHumidity(result, segment_display):
     segment_display.show()
 
 
+# Funktion, um eine Nachricht auf der Matrix anzuzeigen
 def display_on_matrix(device, message):
     with canvas(device) as draw:
         text(draw, (0, 0), message, fill="white", font=proportional(CP437_FONT))
@@ -102,19 +103,19 @@ class LightSensor:
         self.DEVICE = 0x5c
         self.ONE_TIME_HIGH_RES_MODE_1 = 0x20
 
+    # Funktion, um den Lichtwert zu lesen
     def readLight(self, bus):
-        # Function to read data from the light sensor
         data = bus.read_i2c_block_data(self.DEVICE, self.ONE_TIME_HIGH_RES_MODE_1)
         return convertToNumber(data)
 
+# Funktion, um die Messwerte in eine CSV-Datei zu schreiben
 def log_to_csv(data):
-    # Function to log data to a CSV file
     with open(csv_file, 'a', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(data)
 
+# Funktion, um die Messwerte in die Datenbank zu schreiben
 def log_to_database(data):
-    # Function to log to the database
     cursor.execute(
         """
         INSERT INTO messwerte (Datum, Temperatur, Luftfeuchtigkeit, Lichtlevel, Lichtbewertung, Relaystatus)
@@ -143,38 +144,46 @@ def main():
 
     try:
         while True:
-            # Get the current time from the NTP server
+            # Aktuelle Zeit holen
             current_time = datetime.datetime.now()
+            # Entscheiden, ob es Tag ist, wenn Tag dann is_daytime = True
+            if (current_time.hour >= 6) or (current_time.hour < 18):
+                is_daytime = True
+            else:
+                is_daytime = False
 
-            # Read light level and temperature/humidity values
+            # Lichtlevel und Temperatur bzw. Luftfeuchtigkeit auslesen
             light_level = lightSensor.readLight(bus)
             tempHum = tempHumSensor.read()
+            needs_light = False
 
-            # Determine light assessment based on light level
+            # Lichtbewertung basierend auf Lichtlevel bestimmen
+            # und Anzeige auf der Matrix aktualisieren
             if light_level > OPTIMAL_LIGHT_LEVEL + LIGHT_LEVEL_TOLERANCE:
-                light_assessment = "H"  # Too bright
+                light_assessment = "H"  # zu Hell
                 display_on_matrix(matrixDisplay, "H")
+                needs_light = False
             elif light_level < OPTIMAL_LIGHT_LEVEL - LIGHT_LEVEL_TOLERANCE:
-                light_assessment = "D"  # Too dark
+                light_assessment = "D"  # zu Dunkel
                 display_on_matrix(matrixDisplay, "D")
+                needs_light = True
             else:
-                light_assessment = "G"  # Good
+                light_assessment = "G"  # optimal bzw. gut
                 display_on_matrix(matrixDisplay, "G")
 
-            # Control the relay based on the current time
-            if current_time.time() < datetime.time(6, 0) or current_time.time() > datetime.time(20, 0):
-                # If before 6:00 AM or after 8:00 PM, turn on the relay
-                GPIO.output(RELAY_PIN, GPIO.HIGH)
+            # Relais schalten basierend auf Tageszeit und Lichtbewertung
+            if is_daytime and needs_light:
+                GPIO.output(RELAY_PIN, GPIO.LOW)
                 relay_state = "ON"
             else:
-                # Otherwise, turn off the relay
-                GPIO.output(RELAY_PIN, GPIO.LOW)
+                GPIO.output(RELAY_PIN, GPIO.HIGH)
                 relay_state = "OFF"
 
-            # Display temperature and humidity on the 7-segment display and LCD
+
+            # Temperatur und Luftfeuchtigkeit auf dem 7-Segment-Display und LCD anzeigen
             displayTemperatureAndHumidity(tempHum, segmentDisplay)
 
-            # Log the current data to the CSV file
+
             log_data = [
                 current_time.strftime("%Y-%m-%d %H:%M:%S"),
                 tempHum.temperature,
@@ -183,17 +192,17 @@ def main():
                 light_assessment,
                 relay_state
             ]
-            log_to_csv(log_data)
-            log_to_database(log_data)
+            log_to_csv(log_data) # Messwerte in die CSV-Datei schreiben
+            log_to_database(log_data) # Messwerte in die Datenbank schreiben
 
             time.sleep(60)
 
     except KeyboardInterrupt: # Wenn STRG+C gedrückt wird:
-        GPIO.cleanup()
+        GPIO.cleanup() # GPIO-Pins zurücksetzen
         lcd.clear() # Anzeige auf dem LCD löschen
         lcd.backlight = False # Hintergrundbeleuchtung des LCD ausschalten
         display_on_matrix(matrixDisplay, "") # Anzeige auf der Matrix löschen
-        getSegmentDisplay()
+        getSegmentDisplay() # 7-Segment-Display löschen
 
 
 
