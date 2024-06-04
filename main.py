@@ -122,6 +122,7 @@ def log_to_database(data):
         """,
         data
     )
+    conn.commit()
 
 
 def main():
