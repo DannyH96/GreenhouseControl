@@ -16,15 +16,33 @@ from luma.core.interface.serial import spi, noop
 from luma.led_matrix.device import max7219
 from luma.core.render import canvas
 from dht11 import DHT11
-
 from socket import AF_INET, SOCK_DGRAM
-import ntplib
+import sqlite3
 
 LCD_COLUMNS = 16
 LCD_ROWS = 2
 LIGHT_LEVEL_TOLERANCE = 5000
 OPTIMAL_LIGHT_LEVEL = 40000
 RELAY_PIN = 21
+
+# Datenbankverbindung aufbauen
+conn = sqlite3.connect('data.db')
+cursor = conn.cursor()
+cursor.execute(
+    """
+    CREATE TABLE IF NOT EXISTS messwerte (
+    id INTEGER PRIMARY KEY,
+    Datum TEXT NOT NULL,
+    Temperatur REAL,
+    Luftfeuchtigkeit REAL,
+    Lichtlevel TEXT,
+    Lichtbewertung TEXT,
+    Relaystatus TEXT
+    )
+    """
+)
+conn.commit()
+
 
 # Initialize I2C Bus
 i2c_lcd = busio.I2C(board.SCL, board.SDA)
@@ -89,19 +107,21 @@ class LightSensor:
         data = bus.read_i2c_block_data(self.DEVICE, self.ONE_TIME_HIGH_RES_MODE_1)
         return convertToNumber(data)
 
-
-def get_ntp_time(server):
-    # Function to get the current time from an NTP server
-    client = ntplib.NTPClient()
-    response = client.request(server)
-    return datetime.datetime.fromtimestamp(response.tx_time)
-
-
 def log_to_csv(data):
     # Function to log data to a CSV file
     with open(csv_file, 'a', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(data)
+
+def log_to_database(data):
+    # Function to log to the database
+    cursor.execute(
+        """
+        INSERT INTO messwerte (Datum, Temperatur, Luftfeuchtigkeit, Lichtlevel, Lichtbewertung, Relaystatus)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        data
+    )
 
 
 def main():
@@ -120,12 +140,10 @@ def main():
     segmentDisplay = getSegmentDisplay()
     matrixDisplay = getMatrixDisplay()
 
-    ntp_server = "10.254.5.115"  # NTP server address
-
     try:
         while True:
             # Get the current time from the NTP server
-            current_time = get_ntp_time(ntp_server)
+            current_time = datetime.datetime.now()
 
             # Read light level and temperature/humidity values
             light_level = lightSensor.readLight(bus)
@@ -165,12 +183,14 @@ def main():
                 relay_state
             ]
             log_to_csv(log_data)
+            log_to_database(log_data)
 
             time.sleep(60)
 
     except KeyboardInterrupt: # Wenn STRG+C gedrückt wird:
         GPIO.cleanup()
         lcd.clear() # Anzeige auf dem LCD löschen
+        lcd.backlight = False # Hintergrundbeleuchtung des LCD ausschalten
         display_on_matrix(matrixDisplay, "") # Anzeige auf der Matrix löschen
         getSegmentDisplay()
 
