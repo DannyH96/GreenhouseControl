@@ -154,7 +154,12 @@ def main():
 
             # Lichtlevel und Temperatur bzw. Luftfeuchtigkeit auslesen
             light_level = lightSensor.readLight(bus)
+
             tempHum = tempHumSensor.read()
+            # Messwerte aus DHT11 auslesen, bis sie gültig sind
+            while not tempHum.is_valid():
+                tempHum = tempHumSensor.read()
+
             needs_light = False
 
             # Lichtbewertung basierend auf Lichtlevel bestimmen
