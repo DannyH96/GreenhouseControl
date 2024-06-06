@@ -200,7 +200,7 @@ def main():
             log_to_csv(log_data) # Messwerte in die CSV-Datei schreiben
             log_to_database(log_data) # Messwerte in die Datenbank schreiben
 
-            time.sleep(60)
+            time.sleep(5)
 
     except KeyboardInterrupt: # Wenn STRG+C gedrückt wird:
         GPIO.cleanup() # GPIO-Pins zurücksetzen
